@@ -64,6 +64,12 @@ flowchart LR
 | [`delegate-with-qa`](skills/delegate-with-qa/SKILL.md) | scoped idea → background agent implements → agentic QA → self-heal until merge-ready | qa layers, self-heal loop |
 | [`post-merge-check`](skills/post-merge-check/SKILL.md) | merged PR → deployed → N monitoring cycles → verdict | llm-trace-investigation |
 
+### Design
+
+| Skill | What it does |
+|---|---|
+| [`tech-design-html`](skills/tech-design-html/SKILL.md) | Writes a tech design as one self-contained HTML page: summary first, numbered sections, clickable architecture lanes by owner, sequence and state diagrams drawn from data, and tables for status, requirements, phases, alternatives and open questions. Headless Chrome checks layout and diagrams before sharing. It can add an **optional narrated audio walkthrough**, but only after asking. The walkthrough is voiced with OpenAI TTS, checked by transcribing it back, and embedded with a player that keeps the pitch at 0.75× to 2× and loads nothing until opened. Needs Node 22+ and Chrome; the walkthrough also needs Python 3, `ffmpeg` and an OpenAI key. |
+
 ### Investigation & verification
 
 | Skill | What it does |
