@@ -118,7 +118,7 @@ It needs Node 22+ and Chrome; set `CHROME_PATH` for another browser. Read `refer
 
 ## Optional audio walkthrough
 
-This is a narrated tour of the page that plays while the reader scrolls, Build it only after the user says yes (_Workflow_, step 6). The page must still read completely without it.
+This is a narrated tour of the page that plays while the reader scrolls. Build it only after the user says yes (_Workflow_, step 6). The page must still read completely without it.
 
 - `references/audio-walkthrough.md` covers the writing rules, voicing, assembly, embedding and checks. The writing rules matter most: explain how the design plays, don't read the page.
 - `walkthrough_embed.py <page> --remove` takes it out again.
