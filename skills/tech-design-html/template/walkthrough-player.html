@@ -1,0 +1,164 @@
+<!-- walkthrough:start · optional audio walkthrough, added by scripts/walkthrough_embed.py. Remove it with: walkthrough_embed.py <page> --remove -->
+<style>
+  nav.toc .walk-btn { display: flex; align-items: center; gap: 8px; width: calc(100% - 8px); margin: 0 0 14px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); color: var(--text); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; text-align: left; }
+  nav.toc .walk-btn:hover { border-color: var(--accent); }
+  nav.toc .walk-btn .wb-ico { width: 18px; height: 18px; border-radius: 50%; background: var(--accent); flex: none; position: relative; }
+  nav.toc .walk-btn .wb-ico::after { content: ""; position: absolute; left: 7px; top: 5px; border-left: 6px solid #fff; border-top: 4px solid transparent; border-bottom: 4px solid transparent; }
+  nav.toc .walk-btn small { display: block; font-weight: 400; color: var(--muted); font-size: 11.5px; }
+  .walkbar { position: fixed; z-index: 50; right: 18px; bottom: 18px; width: min(640px, calc(100vw - 36px)); background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 28px rgba(26,29,38,.14); padding: 10px 12px; font-size: 13px; }
+  .walkbar[hidden] { display: none; }
+  .walkbar .wb-row { display: flex; align-items: center; gap: 8px; }
+  .walkbar button, .walkbar select { font: inherit; font-size: 12.5px; color: var(--text); background: var(--panel-alt); border: 1px solid var(--border); border-radius: 7px; padding: 4px 8px; cursor: pointer; }
+  .walkbar button:hover, .walkbar select:hover { border-color: #C9CEDA; }
+  .walkbar .wb-play { width: 34px; height: 34px; border-radius: 50%; background: var(--accent); border-color: var(--accent); color: #fff; padding: 0; display: grid; place-items: center; flex: none; }
+  .walkbar .wb-play svg { width: 14px; height: 14px; fill: #fff; }
+  .walkbar .wb-chap { flex: 1; min-width: 0; text-align: left; background: none; border-color: transparent; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .walkbar .wb-time { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .walkbar .wb-close { background: none; border-color: transparent; color: var(--muted); font-size: 16px; line-height: 1; padding: 4px 6px; }
+  .walkbar .wb-track { position: relative; height: 18px; margin: 8px 2px 2px; }
+  .walkbar .wb-track input { position: absolute; inset: 0; width: 100%; margin: 0; accent-color: var(--accent); cursor: pointer; }
+  .walkbar .wb-tick { position: absolute; top: 2px; width: 1px; height: 4px; background: #B8BDCB; pointer-events: none; }
+  .walkbar .wb-follow { display: flex; align-items: center; gap: 4px; color: var(--muted); white-space: nowrap; cursor: pointer; }
+  .walkbar .wb-status { color: var(--muted); font-size: 12px; min-height: 0; }
+  .walkbar .wb-list { list-style: none; margin: 8px 0 0; padding: 6px 0 0; border-top: 1px solid var(--border); max-height: 40vh; overflow-y: auto; }
+  .walkbar .wb-list[hidden] { display: none; }
+  .walkbar .wb-list button { display: flex; width: 100%; gap: 10px; background: none; border: 0; border-radius: 6px; padding: 5px 8px; text-align: left; }
+  .walkbar .wb-list button:hover { background: var(--panel-alt); }
+  .walkbar .wb-list button.on { color: var(--accent); font-weight: 600; }
+  .walkbar .wb-list .t { color: var(--muted); font-variant-numeric: tabular-nums; width: 34px; flex: none; }
+  @media print { .walkbar, nav.toc .walk-btn { display: none !important; } }
+</style>
+<div class="walkbar" id="walkbar" hidden role="region" aria-label="Audio walkthrough">
+  <div class="wb-row">
+    <button class="wb-play" id="wbPlay" aria-label="Play"><svg viewBox="0 0 14 14" id="wbIco"><path d="M3 1.5v11l9.5-5.5z"/></svg></button>
+    <button id="wbBack" title="Back 15 seconds">−15s</button>
+    <button id="wbFwd" title="Forward 15 seconds">+15s</button>
+    <button class="wb-chap" id="wbChap" aria-expanded="false" title="Sections">Intro</button>
+    <span class="wb-time" id="wbTime">0:00 / 0:00</span>
+    <select id="wbRate" title="Speed (pitch is kept)">
+      <option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="1.75">1.75×</option><option value="2">2×</option>
+    </select>
+    <label class="wb-follow" title="Scroll the page to the section being explained"><input type="checkbox" id="wbFollow"> Follow</label>
+    <button class="wb-close" id="wbClose" aria-label="Close walkthrough">×</button>
+  </div>
+  <div class="wb-track" id="wbTrack"><input type="range" id="wbSeek" min="0" max="1000" step="1" value="0" aria-label="Position"></div>
+  <div class="wb-status" id="wbStatus"></div>
+  <ol class="wb-list" id="wbList" hidden></ol>
+</div>
+<script type="application/octet-stream" id="walkAudio">__AUDIO_B64__</script>
+<script>
+/* ---------- optional audio walkthrough ----------
+   Nothing loads or plays until the reader opens it. Strict hosts block <audio> with data: URLs, so the embedded MP3 is
+   decoded with Web Audio. Speeds other than 1x play a time-stretched copy (WSOLA) so the voice keeps its pitch. */
+(() => {
+  const CHAPTERS = __CHAPTERS__;
+  const DURATION = __DURATION__;
+  const $ = id => document.getElementById(id);
+  const bar = $('walkbar'), btnOpen = $('walkOpen');
+  const fmt = t => { t = Math.max(0, Math.floor(t)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
+  let ctx = null, buf = null, loading = null, src = null, startedAt = 0, offset = 0, rate = 1, playing = false, tick = null;
+  const stretched = new Map();
+  const ac = () => (ctx ||= new (window.AudioContext || window.webkitAudioContext)());
+
+  function load() {
+    return (loading ||= (async () => {
+      setStatus('Loading audio…');
+      const b64 = $('walkAudio').textContent.trim();
+      const bin = atob(b64), bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      buf = await ac().decodeAudioData(bytes.buffer);
+      stretched.set(1, buf); setStatus('');
+    })());
+  }
+  // Waveform-similarity overlap-add: changes duration by 1/r without changing pitch. Yields to keep the page responsive.
+  async function stretch(r) {
+    const sr = buf.sampleRate, x = buf.getChannelData(0), n = x.length;
+    const N = Math.round(sr * 0.04) & ~1, Hs = N / 2, Ha = Hs * r, tol = Math.round(sr * 0.012);
+    const win = new Float32Array(N); for (let i = 0; i < N; i++) win[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / N);
+    const outLen = Math.ceil(n / r) + N, y = new Float32Array(outLen), w = new Float32Array(outLen);
+    let prev = 0;
+    for (let k = 0; ; k++) {
+      const nominal = Math.round(k * Ha);
+      if (nominal + N + tol >= n) break;
+      let pos = nominal;
+      if (k > 0) {
+        const nat = prev + Hs; let best = -Infinity, bestD = 0;
+        const corr = d => { let s = 0; const p = nominal + d; for (let i = 0; i < N; i += 4) s += x[p + i] * x[nat + i]; return s; };
+        const lo = Math.max(-tol, -nominal), hi = tol;
+        for (let d = lo; d <= hi; d += 3) { const c = corr(d); if (c > best) { best = c; bestD = d; } }
+        for (let d = bestD - 2; d <= bestD + 2; d++) { if (d < lo || d > hi) continue; const c = corr(d); if (c > best) { best = c; bestD = d; } }
+        pos = nominal + bestD;
+      }
+      const o = k * Hs;
+      for (let i = 0; i < N; i++) { y[o + i] += x[pos + i] * win[i]; w[o + i] += win[i]; }
+      prev = pos;
+      if (k % 1500 === 1499) await new Promise(res => setTimeout(res, 0));
+    }
+    for (let i = 0; i < outLen; i++) if (w[i] > 1e-3) y[i] /= w[i];
+    const out = ac().createBuffer(1, outLen, sr); out.getChannelData(0).set(y); return out;
+  }
+  const bufferFor = r => { if (!stretched.has(r)) stretched.set(r, stretch(r)); return Promise.resolve(stretched.get(r)); };
+
+  const now = () => playing ? Math.min(DURATION, offset + (ac().currentTime - startedAt) * rate) : offset;
+  async function start() {
+    const b = await bufferFor(rate);
+    stopSrc();
+    const s = ac().createBufferSource(); s.buffer = b; s.connect(ac().destination);
+    s.onended = () => { if (src !== s) return; src = null; playing = false; offset = DURATION; render(); };
+    startedAt = ac().currentTime; s.start(0, Math.min(offset / rate, Math.max(0, b.duration - 0.05))); src = s;
+  }
+  function stopSrc() { if (src) { const s = src; src = null; try { s.stop(); } catch {} } }
+  async function play() {
+    await ac().resume(); await load();
+    if (offset >= DURATION - 0.2) offset = 0;
+    playing = true; await start(); render();
+    clearInterval(tick); tick = setInterval(render, 250);
+  }
+  function pause() { offset = now(); playing = false; stopSrc(); clearInterval(tick); render(); }
+  async function seek(t) { offset = Math.max(0, Math.min(DURATION, t)); if (playing) await start(); render(); }
+  async function setRate(r) {
+    if (r === rate) return;
+    if (buf && !(stretched.get(r) instanceof AudioBuffer)) setStatus('Preparing ' + r + '× (pitch kept)…');
+    if (buf) { const b = await bufferFor(r); stretched.set(r, b); }
+    if (+$('wbRate').value !== r) return;
+    const t = now(); rate = r; offset = t; if (playing) await start(); setStatus(''); render();
+  }
+  function setStatus(t) { $('wbStatus').textContent = t; }
+
+  const chapterAt = t => { let i = 0; for (let k = 0; k < CHAPTERS.length; k++) if (t >= CHAPTERS[k][0] - 0.05) i = k; return i; };
+  let lastChap = -1;
+  function render() {
+    const t = now(), i = chapterAt(t);
+    $('wbTime').textContent = fmt(t) + ' / ' + fmt(DURATION);
+    if (document.activeElement !== $('wbSeek')) $('wbSeek').value = Math.round((t / DURATION) * 1000);
+    $('wbChap').textContent = CHAPTERS[i][1];
+    $('wbIco').innerHTML = playing ? '<path d="M3 1.5h3v11H3zM8 1.5h3v11H8z"/>' : '<path d="M3 1.5v11l9.5-5.5z"/>';
+    $('wbPlay').setAttribute('aria-label', playing ? 'Pause' : 'Play');
+    $('wbList').querySelectorAll('button').forEach((b, k) => b.classList.toggle('on', k === i));
+    if (i !== lastChap) { if (lastChap !== -1 && playing && $('wbFollow').checked) goTo(i); lastChap = i; }
+  }
+  const goTo = i => { const el = document.getElementById(CHAPTERS[i][2]); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+
+  // chapter ticks and list
+  CHAPTERS.forEach(([t, title, id], i) => {
+    if (i) { const d = document.createElement('div'); d.className = 'wb-tick'; d.style.left = (t / DURATION) * 100 + '%'; $('wbTrack').appendChild(d); }
+    const li = document.createElement('li'), b = document.createElement('button');
+    b.innerHTML = '<span class="t">' + fmt(t) + '</span><span></span>'; b.lastChild.textContent = title;
+    b.onclick = () => { seek(t); goTo(i); if (!playing) play(); toggleList(false); };
+    li.appendChild(b); $('wbList').appendChild(li);
+  });
+  const toggleList = open => { $('wbList').hidden = !open; $('wbChap').setAttribute('aria-expanded', String(open)); };
+
+  btnOpen.onclick = () => { bar.hidden = false; render(); $('wbPlay').focus(); };
+  $('wbClose').onclick = () => { pause(); toggleList(false); bar.hidden = true; };
+  $('wbPlay').onclick = () => (playing ? pause() : play());
+  $('wbBack').onclick = () => seek(now() - 15);
+  $('wbFwd').onclick = () => seek(now() + 15);
+  $('wbChap').onclick = () => toggleList($('wbList').hidden);
+  $('wbSeek').oninput = e => { $('wbTime').textContent = fmt((e.target.value / 1000) * DURATION) + ' / ' + fmt(DURATION); };
+  $('wbSeek').onchange = e => seek((e.target.value / 1000) * DURATION);
+  $('wbRate').onchange = e => setRate(+e.target.value);
+  window.__walk = { now, get playing() { return playing; }, get rate() { return rate; }, stretched, chapters: CHAPTERS, duration: DURATION };  // read by check_walkthrough.mjs
+})();
+</script>
+<!-- walkthrough:end -->

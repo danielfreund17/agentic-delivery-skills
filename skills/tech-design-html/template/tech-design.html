@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<!-- TEMPLATE: tech design page. Replace every example (a fictional "webhook delivery" design) with your own.
+     Keep the CSS and the first <script> (renderers and wiring) as they are; change only :root to restyle.
+     Edit the last <script>: it holds only data and diagram calls. -->
+<title>Webhook delivery: tech design (draft)</title>
+<style>
+  :root {
+    /* PALETTE (the only block to change when restyling) */
+    --bg: #F5F6FA; --panel: #FFFFFF; --panel-alt: #F0F2F7; --border: #E2E5ED;
+    --text: #1A1D26; --muted: #6B7190;
+    --accent: #FF0083; --accent-soft: rgba(255,0,131,.07);  /* section numbers, selection, layer A */
+    --lane-a: #FF0083;   /* layer owned by the authoring team */
+    --lane-b: #334155;   /* the other owning layer */
+    --lane-c: #0E7490;   /* a third owner, when there is one */
+    --lane-x: #8A90A8;   /* external (dashed) and reused systems (solid) */
+    --good: #047857; --warn: #B45309; --dir: #1d4ed8;
+    --code-bg: #FBFBFD; --c-com: #7E84A0; --c-key: #9a3412; --c-str: #0a3069; --c-kw: #b4005c;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "DM Sans", sans-serif; line-height: 1.55; font-size: 15px; }
+  .layout { display: grid; grid-template-columns: 230px minmax(0, 1fr); max-width: 1320px; margin: 0 auto; }
+  nav.toc { position: sticky; top: 0; height: 100vh; overflow-y: auto; padding: 28px 10px 28px 22px; font-size: 13px; border-right: 1px solid var(--border); }
+  nav.toc .brand { font-weight: 700; font-size: 13px; margin-bottom: 14px; }
+  nav.toc a { display: block; color: var(--muted); text-decoration: none; padding: 4px 8px; border-left: 2px solid transparent; }
+  nav.toc a:hover { color: var(--text); }
+  nav.toc a.active { color: var(--text); border-left-color: var(--accent); font-weight: 600; }
+  main { padding: 32px 40px 100px; min-width: 0; }
+  @media (max-width: 1100px) { .layout { grid-template-columns: 1fr; } nav.toc { display: none; } main { padding: 20px 24px; } }
+  h1 { font-size: 28px; margin: 0 0 6px; letter-spacing: -.01em; }
+  h2 { font-size: 20px; margin: 44px 0 6px; padding-top: 8px; scroll-margin-top: 12px; }
+  h2 .n { color: var(--accent); font-variant-numeric: tabular-nums; margin-right: 8px; }
+  h3 { font-size: 15px; margin: 22px 0 6px; }
+  .lead { color: var(--muted); margin: 0 0 14px; max-width: 900px; }
+  .meta { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  .meta a { color: var(--muted); }
+  p { max-width: 920px; margin: 8px 0; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; margin: 12px 0; }
+  .tldr { border-left: 3px solid var(--accent); }
+  .tldr ol { margin: 6px 0 0; padding-left: 20px; }
+  .tldr li { margin: 5px 0; }
+  .label { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .cols3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 900px) { .cols, .cols3 { grid-template-columns: 1fr; } }
+  .cols > .panel, .cols3 > .panel { margin: 0; }
+  .cols > *, .cols3 > * { min-width: 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin: 10px 0; }
+  th, td { padding: 8px 12px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { background: var(--panel-alt); color: var(--muted); font-weight: 600; font-size: 12px; }
+  tr:last-child td { border-bottom: none; }
+  code, pre { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 12.5px; }
+  code { background: var(--panel-alt); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; overflow-x: auto; margin: 8px 0; line-height: 1.5; }
+  pre code { background: none; padding: 0; }
+  .com { color: var(--c-com); } .key { color: var(--c-key); } .str { color: var(--c-str); } .kw { color: var(--c-kw); }
+  .codepair pre { font-size: 11.8px; }
+  @media (max-width: 1180px) { .cols.codepair { grid-template-columns: 1fr; } }
+  .tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--border); color: var(--muted); white-space: nowrap; background: #fff; }
+  .tag.a { border-color: var(--lane-a); color: var(--lane-a); }
+  .tag.b { border-color: var(--lane-b); color: var(--lane-b); }
+  .tag.c { border-color: var(--lane-c); color: var(--lane-c); }
+  .tag.x { border-style: dashed; }
+  .tag.agreed { border-color: var(--good); color: var(--good); }
+  .tag.proposed { border-color: var(--warn); color: var(--warn); }
+  .tag.dir { border-color: var(--dir); color: var(--dir); }
+  .note { font-size: 13px; color: var(--muted); }
+  .takeaway { border-left: 3px solid var(--lane-b); padding: 6px 14px; margin: 12px 0; background: #fff; border-radius: 0 6px 6px 0; max-width: 920px; }
+  details { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; margin: 10px 0; }
+  details > summary { cursor: pointer; padding: 10px 16px; font-weight: 600; font-size: 13.5px; }
+  details > div { padding: 0 16px 12px; }
+  ul.tight { margin: 6px 0; padding-left: 20px; } ul.tight li { margin: 3px 0; }
+  ol.tight { margin: 4px 0; padding-left: 20px; }
+
+  /* architecture: lanes of clickable components + a detail panel */
+  .arch { display: grid; grid-template-columns: var(--arch-cols, 170px 1fr 1fr 190px); gap: 12px; align-items: stretch; } /* other lane counts: style="--arch-cols: …" */
+  @media (max-width: 1100px) { .arch { grid-template-columns: 1fr 1fr; } }
+  .lane { border: 1px solid var(--border); border-radius: 10px; background: #fff; padding: 10px; display: flex; flex-direction: column; gap: 7px; }
+  .lane h4 { margin: 0 0 2px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); display: flex; justify-content: space-between; align-items: center; }
+  .lane.a { border-top: 3px solid var(--lane-a); }
+  .lane.b { border-top: 3px solid var(--lane-b); }
+  .lane.c { border-top: 3px solid var(--lane-c); }
+  .lane.x { border-style: dashed; }
+  .comp { border: 1px solid var(--border); border-radius: 6px; padding: 6px 9px; font-size: 13px; cursor: pointer; background: #fff; transition: border-color .12s, background .12s; }
+  .comp small { display: block; color: var(--muted); font-size: 11.5px; line-height: 1.35; }
+  .comp:hover { border-color: #b9bdcc; }
+  .comp.sel { border-color: var(--accent); background: var(--accent-soft); }
+  .shared { grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; background: #fff; }
+  .shared .label { margin: 0 6px 0 0; }
+  .shared .comp { flex: 1; min-width: 120px; }
+  .detail { margin-top: 12px; min-height: 92px; }
+  .detail h5 { margin: 0 0 4px; font-size: 14px; }
+  .detail dl { display: grid; grid-template-columns: 110px 1fr; gap: 4px 12px; margin: 6px 0 0; font-size: 13.5px; }
+  .detail dt { color: var(--muted); }
+  .detail dd { margin: 0; }
+
+  /* diagrams (sequence + state), drawn by the script at the bottom */
+  .seq { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 8px; overflow-x: auto; margin: 10px 0; }
+  .seq svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .seq text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  footer { margin-top: 60px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--border); padding-top: 14px; }
+  footer a { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc" id="toc">
+  <div class="brand">Webhook delivery<br><span style="font-weight:400;color:var(--muted)">Tech design · draft</span></div>
+  <!-- One link per section: the summary and every <h2 id>. The scrollspy highlights the current one. -->
+  <a href="#tldr">Summary</a>
+  <a href="#context">1. Context and goals</a>
+  <a href="#status">2. Agreed, proposed, open</a>
+  <a href="#arch">3. Architecture</a>
+  <a href="#definition">4. The subscription</a>
+  <a href="#contract">5. Delivery contract</a>
+  <a href="#lifecycle">6. Delivery lifecycle</a>
+  <a href="#requirements">7. Requirements</a>
+  <a href="#security">8. Security and reliability</a>
+  <a href="#data">9. Data model and APIs</a>
+  <a href="#phases">10. Phases</a>
+  <a href="#alternatives">11. Alternatives considered</a>
+  <a href="#open">12. Open questions</a>
+</nav>
+
+<main>
+<h1>Webhook delivery: tech design</h1>
+<div class="meta">Draft for review by the Platform and Infra teams · Author Name · 1 January 2030 ·
+  follows the <a href="#">kickoff notes</a>. Names, schemas and endpoints are proposals unless §2 marks them agreed.
+  <b>Every name and number on this page is a made-up example.</b></div>
+
+<!-- SUMMARY: 4–6 numbered points. Each one is a bold claim, then one or two sentences. The reader who stops here knows the design. -->
+<section id="tldr" class="panel tldr">
+  <span class="label">Summary</span>
+  <ol>
+    <li><b>One delivery service for every team.</b> Teams publish an event once. The service delivers it to every subscriber's URL, signs it, and retries it. No team writes its own retry loop again.</li>
+    <li><b>At-least-once, never lost.</b> An event is saved before it is accepted, and every attempt is saved before it is sent. Subscribers dedupe on <code>eventId</code>.</li>
+    <li><b>Two layers.</b> The Platform team owns subscriptions, signing and the console. Infra owns the worker pool and the queue.</li>
+    <li><b>First step:</b> move the billing webhooks. Done when they run on the service with no lost deliveries over a release.</li>
+  </ol>
+</section>
+
+<!-- 1 -->
+<h2 id="context"><span class="n">1</span>Context and goals</h2>
+<p class="lead">One sentence on the problem, in the reader's terms. Then the evidence: who has the problem today, and how they handle it.</p>
+<table>
+  <tr><th>Who</th><th>What they send</th><th>How it runs today</th><th>Repository</th></tr>
+  <tr><td>Billing</td><td>Invoice and payment events to partners</td><td>A cron that retries three times</td><td><code>billing-service</code></td></tr>
+  <tr><td>Orders</td><td>Order status changes</td><td>Sent inline in the request; lost on timeout</td><td><code>orders</code></td></tr>
+</table>
+<div class="cols">
+  <div class="panel"><span class="label">Goals</span>
+    <ul class="tight"><li>Every webhook is delivered at least once, or reported as failed.</li><li>A team adds a subscriber with a definition, not code.</li></ul></div>
+  <div class="panel"><span class="label">Non-goals</span>
+    <ul class="tight"><li>Exactly-once delivery. Subscribers dedupe.</li><li>Transforming payloads per subscriber.</li></ul></div>
+</div>
+
+<!-- 2 STATUS: what is decided, what is proposed by whom, what is open. Always cite the source. -->
+<h2 id="status"><span class="n">2</span>Agreed, proposed and open</h2>
+<table>
+  <tr><th style="width:120px">State</th><th>Item</th><th style="width:220px">Source</th></tr>
+  <tr><td><span class="tag agreed">agreed</span></td><td>Two layers: Platform owns subscriptions; Infra owns workers.</td><td>Kickoff, 1 Jan</td></tr>
+  <tr><td><span class="tag dir">direction</span></td><td>One service for every team; no per-team retry loops.</td><td>Engineering lead, team channel</td></tr>
+  <tr><td><span class="tag proposed">proposed · Platform</span></td><td>Signing with per-subscriber secrets (§7).</td><td>This document</td></tr>
+  <tr><td><span class="tag">open</span></td><td>Ordering per subscriber · retention. Each has a proposed answer in §11.</td><td>Kickoff</td></tr>
+</table>
+
+<!-- 3 ARCHITECTURE: lanes by owner. Every .comp has data-c pointing at an entry in ARCH (script). Click shows owner, role, interface, phase. -->
+<h2 id="arch"><span class="n">3</span>Architecture</h2>
+<p class="lead">Two sentences on the flow, left to right. <b>Click any component</b> to see its owner and interface.</p>
+<div class="arch" id="archGrid">
+  <div class="lane"><h4>Producers</h4>
+    <div class="comp" data-c="producer">Team service<small>publishes an event</small></div>
+  </div>
+  <div class="lane a"><h4>Delivery service <span class="tag a">Platform</span></h4>
+    <div class="comp" data-c="api">Events API<small>accepts and saves events</small></div>
+    <div class="comp" data-c="fanout">Fan-out<small>one delivery per subscriber</small></div>
+    <div class="comp" data-c="console">Console<small>deliveries, failures, replays</small></div>
+  </div>
+  <div class="lane b"><h4>Workers <span class="tag b">Infra</span></h4>
+    <div class="comp" data-c="queue">Queue<small>due deliveries</small></div>
+    <div class="comp" data-c="worker">Worker pool<small>signs, sends, records attempts</small></div>
+  </div>
+  <div class="lane x"><h4>External</h4>
+    <div class="comp" data-c="subscriber">Subscriber URL<small>partner endpoint</small></div>
+  </div>
+  <div class="shared"><span class="label">Reused</span>
+    <div class="comp" data-c="db">Postgres<small>events, attempts</small></div>
+    <div class="comp" data-c="tracing">Tracing<small>one trace per delivery</small></div>
+  </div>
+</div>
+<div class="panel detail" id="archDetail"><span class="note">Select a component.</span></div>
+
+<!-- 4 CODE PAIR: two contrasting examples side by side. Keep lines ≤ ~50 characters, comments short. -->
+<h2 id="definition"><span class="n">4</span>The subscription</h2>
+<p class="lead">A subscription is a definition, not code. Both examples are illustrative.</p>
+<div class="cols codepair">
+<div><span class="label">Simple · all events</span>
+<pre><code><span class="com"># billing/subscriptions/partner-a.yaml</span>
+<span class="key">key</span>: billing.partner-a
+<span class="key">owner</span>: { team: billing }
+<span class="key">url</span>: https://partner-a.example/hooks
+<span class="key">events</span>: [<span class="str">"invoice.*"</span>]
+<span class="key">retry</span>: { max: 10, backoff: exponential }</code></pre></div>
+<div><span class="label">Filtered · ordered</span>
+<pre><code><span class="com"># orders/subscriptions/warehouse.yaml</span>
+<span class="key">key</span>: orders.warehouse
+<span class="key">owner</span>: { team: orders }
+<span class="key">url</span>: https://wh.example/orders
+<span class="key">events</span>: [<span class="str">"order.shipped"</span>]
+<span class="key">ordering</span>: per-key        <span class="com"># key = orderId</span>
+<span class="key">retry</span>: { max: 20, backoff: exponential }</code></pre></div>
+</div>
+<details><summary>Field reference</summary><div>
+<table>
+  <tr><th>Field</th><th>Meaning</th><th>Validated at publish</th></tr>
+  <tr><td><code>events</code></td><td>Event names or wildcards.</td><td>Each name exists</td></tr>
+  <tr><td><code>ordering</code></td><td><code>none</code> or <code>per-key</code>.</td><td>The key is in the schema</td></tr>
+</table></div></details>
+
+<!-- 5 CONTRACT: a sequence diagram (data in the script), the interfaces as a code pair, and two panels (API table + rules). -->
+<h2 id="contract"><span class="n">5</span>The delivery contract</h2>
+<p class="lead">The main item to agree on. Say which side is the source of truth for what.</p>
+<h3>One delivery, end to end</h3>
+<div class="seq" id="seqDelivery"></div>
+<p class="note">One line on the property the diagram proves, for example idempotency.</p>
+<div class="cols codepair">
+<div><span class="label">Down: service → worker</span>
+<pre><code><span class="kw">interface</span> DeliveryJob {
+  deliveryId: string;  <span class="com">// idempotency key</span>
+  url: string;
+  payload: unknown;
+  attempt: number;
+}</code></pre></div>
+<div><span class="label">Up: worker → service</span>
+<pre><code><span class="kw">type</span> AttemptResult =
+  | { status: <span class="str">'delivered'</span>; httpCode: number }
+  | { status: <span class="str">'retry'</span>; after: string }
+  | { status: <span class="str">'failed'</span>; reason: string };</code></pre></div>
+</div>
+<div class="cols">
+<div class="panel"><span class="label">Worker API (internal)</span>
+<table style="margin:4px 0 0">
+  <tr><td><code>PUT /jobs/{deliveryId}</code></td><td>Enqueue. Idempotent.</td></tr>
+  <tr><td><code>GET /jobs/{deliveryId}</code></td><td>State and attempts.</td></tr>
+</table></div>
+<div class="panel"><span class="label">Rules</span>
+<ul class="tight"><li>Every attempt is saved before it is sent.</li><li>A 2xx is the only success.</li></ul></div>
+</div>
+
+<!-- 6 LIFECYCLE: the states of the main entity (data in the content script). -->
+<h2 id="lifecycle"><span class="n">6</span>Delivery lifecycle</h2>
+<p class="lead">A delivery ends delivered or failed; it never disappears.</p>
+<div class="seq" id="stateDelivery"></div>
+<p class="note">One line on the states a reader might misread.</p>
+
+<!-- 7 REQUIREMENTS: what each layer must provide, who enforces it, and in which phase. -->
+<h2 id="requirements"><span class="n">7</span>Requirements</h2>
+<p class="lead">The <b>Owner</b> column says which layer enforces each requirement.</p>
+<table>
+  <tr><th style="width:150px">Requirement</th><th>What it means</th><th style="width:260px">Owner</th><th style="width:70px">Phase</th></tr>
+  <tr><td>Durability</td><td>An accepted event survives a crash of any component.</td><td><span class="tag a">service</span></td><td>1</td></tr>
+  <tr><td>Throughput</td><td>Example: 500 deliveries per second at peak.</td><td><span class="tag b">workers</span></td><td>2</td></tr>
+  <tr><td>Egress</td><td>Workers reach only subscriber URLs, through a proxy.</td><td><span class="tag b">workers</span> enforce · <span class="tag a">service</span> declares</td><td>1</td></tr>
+</table>
+
+<!-- 8 CHECKS + FAILURE: the checks in order, and a sequence that shows what survives a crash ('warn' marks the failure). -->
+<h2 id="security"><span class="n">8</span>Security and reliability</h2>
+<div class="cols">
+  <div class="panel"><span class="label">On every delivery, in order</span>
+    <ol class="tight"><li><b>Resolve</b> the subscription and its secret.</li><li><b>Sign</b> the body with HMAC-SHA256.</li><li><b>Send</b> through the egress proxy.</li></ol></div>
+  <div class="panel"><span class="label">Secrets</span>
+    <p class="note" style="margin:2px 0">Per-subscriber secrets, rotated with an overlap window. Workers never log payloads.</p></div>
+</div>
+<h3>A worker crashes after sending</h3>
+<div class="seq" id="seqCrash"></div>
+<div class="takeaway"><b>One-line takeaway:</b> a crash can repeat a delivery, never lose one; subscribers dedupe on <code>eventId</code>.</div>
+
+<!-- 9 DATA + APIS: who owns which store, then a surface table. -->
+<h2 id="data"><span class="n">9</span>Data model and APIs</h2>
+<div class="cols">
+  <div class="panel"><span class="label">Service database <span class="tag a">Platform</span></span>
+    <ul class="tight"><li><b>Definitions:</b> <code>subscriptions</code>, <code>secrets</code>.</li><li><b>Runtime:</b> <code>events</code>, <code>deliveries</code>, <code>attempts</code>.</li></ul></div>
+  <div class="panel"><span class="label">Queue <span class="tag b">Infra</span></span>
+    <ul class="tight"><li>Due jobs, keyed by <code>deliveryId</code>.</li></ul></div>
+</div>
+<table>
+  <tr><th style="width:170px">Surface</th><th style="width:190px">Called by</th><th>Endpoints (proposed, <code>/v1</code>)</th></tr>
+  <tr><td>Events API</td><td>Team services</td><td><code>POST /events</code> · <code>GET /events/{id}</code></td></tr>
+  <tr><td>Admin API</td><td>Engineers</td><td><code>POST /subscriptions</code> · <code>POST /deliveries/{id}/replay</code></td></tr>
+</table>
+
+<!-- 10 PHASES: ordered by risk. Every phase has a "Done when" that someone can check. -->
+<h2 id="phases"><span class="n">10</span>Phases</h2>
+<table>
+  <tr><th style="width:90px">Phase</th><th>Scope</th><th>Built</th><th>Done when</th></tr>
+  <tr><td><b>1 · Billing</b></td><td>Billing's webhooks</td><td>Events API, workers, console list</td><td>No lost deliveries across a release.</td></tr>
+  <tr><td><b>2 · All teams</b></td><td>Orders and the rest</td><td>Ordering, replay, alerts</td><td>Every team's webhooks run on the service.</td></tr>
+</table>
+<div class="takeaway"><b>Not in phase 1:</b> ordering and replay. Phase 1 proves durability, not adoption.</div>
+
+<!-- 11 ALTERNATIVES: credit what each option gets right before saying why not. -->
+<h2 id="alternatives"><span class="n">11</span>Alternatives considered</h2>
+<table>
+  <tr><th style="width:200px">Option</th><th>What it gets right</th><th>Why not</th></tr>
+  <tr><td>A managed webhook vendor</td><td>No workers to run.</td><td>Example reason: payloads may not leave our network.</td></tr>
+</table>
+
+<!-- 12 OPEN QUESTIONS: never a bare question. Each has a proposed answer and who decides. -->
+<h2 id="open"><span class="n">12</span>Open questions</h2>
+<table>
+  <tr><th style="width:220px">Question</th><th>Proposed answer</th><th style="width:110px">Decides</th></tr>
+  <tr><td>Retention of payloads</td><td>30 days, then only metadata.</td><td>Security</td></tr>
+</table>
+
+<footer>Sources: <a href="#">kickoff notes</a> · <code>billing-service</code> <code>src/webhooks</code> · team channel, 1 Jan.</footer>
+</main>
+</div>
+
+<script>
+/* ======================= renderers and page wiring: do not edit ======================= */
+function cssv(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+// lane owner keys: 'a', 'b', 'c' = owning layers; 's' = reused/shared system; 'x' = external (dashed lifeline)
+function laneColor(o) { return { a: cssv('--lane-a'), b: cssv('--lane-b'), c: cssv('--lane-c') }[o] || cssv('--lane-x'); }
+const NS = 'http://www.w3.org/2000/svg';
+function mk(tag, attrs, text) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; return e; }
+function arrowDef(svg, id) { const d = mk('defs', {}), m = mk('marker', { id, viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' }); m.appendChild(mk('path', { d: 'M0,0 L10,5 L0,10 z', fill: '#475569' })); d.appendChild(m); svg.appendChild(d); }
+
+function seq(id, lanes, steps, opt = {}) {
+  const gap = opt.gap || 175, left = 40, top = 54, row = opt.row || 34;
+  const W = left + 50 + gap * (lanes.length - 1) + 86, H = top + steps.length * row + 26;
+  const svg = mk('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}`, class: 'sequence', 'data-gap': gap }); arrowDef(svg, id + 'a');
+  const x = i => left + 50 + i * gap, warn = cssv('--warn'), text = cssv('--text'), muted = cssv('--muted'), border = cssv('--border');
+  lanes.forEach((l, i) => {
+    svg.appendChild(mk('line', { x1: x(i), y1: top - 8, x2: x(i), y2: H - 8, stroke: border, 'stroke-width': 1.5, 'stroke-dasharray': l.o === 'x' ? '4 4' : '' }));
+    svg.appendChild(mk('rect', { x: x(i) - 72, y: 8, width: 144, height: 34, rx: 6, fill: '#fff', stroke: laneColor(l.o), 'stroke-width': 1.5 }));
+    svg.appendChild(mk('text', { x: x(i), y: 25, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 600, fill: text }, l.n));
+    if (l.s) svg.appendChild(mk('text', { x: x(i), y: 37, 'text-anchor': 'middle', 'font-size': 10, fill: muted }, l.s));
+  });
+  steps.forEach((s, k) => {
+    const [a, b, label, kind] = s, y = top + k * row + 18, w = kind === 'warn';
+    svg.appendChild(mk('circle', { cx: 16, cy: y - 4, r: 9, fill: w ? warn : '#F0F2F7' }));
+    svg.appendChild(mk('text', { x: 16, y, 'text-anchor': 'middle', 'font-size': 10, 'font-weight': 700, fill: w ? '#fff' : '#475569' }, k + 1));
+    if (a === b) { // note box; data-right lets the checker see text that outgrows its box
+      const tw = Math.min(label.length * 6.1 + 16, gap * 1.9), nx = Math.min(x(a) - 6, W - tw - 4);
+      svg.appendChild(mk('rect', { x: nx, y: y - 16, width: tw, height: 22, rx: 4, fill: w ? '#FFF7ED' : '#F5F6FA', stroke: w ? warn : border }));
+      svg.appendChild(mk('text', { x: nx + 10, y: y - 1, 'font-size': 11.5, fill: text, class: 'note-label', 'data-right': nx + tw }, label));
+    } else { // arrow; data-right is where the arrow ends, so the checker can flag labels longer than their arrow
+      const x1 = x(a), x2 = x(b), dir = x2 > x1 ? 1 : -1;
+      svg.appendChild(mk('line', { x1, y1: y, x2: x2 - dir * 2, y2: y, stroke: '#475569', 'stroke-width': 1.3, 'marker-end': `url(#${id}a)`, 'stroke-dasharray': kind === 'ret' ? '5 4' : '' }));
+      svg.appendChild(mk('text', { x: Math.min(x1, x2) + 6, y: y - 5, 'font-size': 11.5, fill: w ? warn : text, class: 'edge-label', 'data-right': Math.max(x1, x2) }, label));
+    }
+  });
+  document.getElementById(id).appendChild(svg);
+}
+
+function stateDiagram(id, d) {
+  const w = 120, h = 34, pad = 20, pts = Object.values(d.nodes);
+  const W = Math.max(...pts.map(p => p[0])) + w + pad, H = Math.max(...pts.map(p => p[1])) + h + pad + 10;
+  const svg = mk('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}`, class: 'state' }); arrowDef(svg, id + 'a');
+  const muted = cssv('--muted'), term = new Set(d.terminal || []);
+  const ctr = n => [d.nodes[n][0] + w / 2, d.nodes[n][1] + h / 2];
+  const clip = (cx, cy, dx, dy) => { const t = Math.min(dx ? (w / 2 + 3) / Math.abs(dx) : Infinity, dy ? (h / 2 + 3) / Math.abs(dy) : Infinity); return [cx + dx * t, cy + dy * t]; };
+  d.edges.forEach(([f, t, label, o = {}]) => {
+    let [x1, y1] = ctr(f), [x2, y2] = ctr(t); const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy), nx = -dy / L, ny = dx / L, s = o.shift || 0;
+    x1 += nx * s; y1 += ny * s; x2 += nx * s; y2 += ny * s;
+    const [ax, ay] = clip(x1, y1, dx, dy), [bx, by] = clip(x2, y2, -dx, -dy);
+    svg.appendChild(mk('line', { x1: ax, y1: ay, x2: bx, y2: by, stroke: '#475569', 'stroke-width': 1.3, 'marker-end': `url(#${id}a)` }));
+    if (label) { // label sits on the outer side of a shifted line, so two-way pairs never collide
+      const side = s ? Math.sign(s) : 1, lx = nx * side, ly = ny * side;
+      const mx = (ax + bx) / 2 + lx * 10 + (o.dx || 0), my = (ay + by) / 2 + ly * 10 + (o.dy || 0) + 3;
+      svg.appendChild(mk('text', { x: mx, y: my, 'text-anchor': Math.abs(dy) < 0.15 * Math.abs(dx) ? 'middle' : (lx < 0 ? 'end' : 'start'), 'font-size': 10.5, fill: muted, class: 'edge-label' }, label)); }
+  });
+  Object.entries(d.nodes).forEach(([n, [x, y]]) => {
+    const stroke = n === d.accent ? cssv('--accent') : n === d.warn ? cssv('--warn') : '#94A3B8';
+    svg.appendChild(mk('rect', { x, y, width: w, height: h, rx: 17, fill: term.has(n) ? '#F5F6FA' : '#fff', stroke, 'stroke-width': 1.5 }));
+    svg.appendChild(mk('text', { x: x + w / 2, y: y + 21, 'text-anchor': 'middle', 'font-size': 12.5, 'font-weight': 600, fill: cssv('--text') }, n));
+  });
+  document.getElementById(id).appendChild(svg);
+}
+
+// Wiring runs after both scripts, so the content block only holds data and diagram calls.
+document.addEventListener('DOMContentLoaded', () => {
+  const det = document.getElementById('archDetail'), comps = document.querySelectorAll('#archGrid .comp');
+  if (det && typeof ARCH !== 'undefined') {
+    comps.forEach(el => el.addEventListener('click', () => {
+      comps.forEach(c => c.classList.remove('sel')); el.classList.add('sel');
+      const [t, owner, what, iface, phase] = ARCH[el.dataset.c];
+      det.innerHTML = `<h5>${t}</h5><dl><dt>Owner</dt><dd>${owner}</dd><dt>What it does</dt><dd>${what}</dd><dt>Interface</dt><dd>${iface}</dd><dt>Phase</dt><dd>${phase}</dd></dl>`;
+    }));
+    const first = document.querySelector('#archGrid .lane.a .comp') || comps[0]; if (first) first.click();
+  }
+  const links = [...document.querySelectorAll('#toc a')], targets = links.map(a => document.querySelector(a.getAttribute('href')));
+  const spy = () => { let i = 0; targets.forEach((t, k) => { if (t && t.getBoundingClientRect().top < 120) i = k; }); links.forEach((a, k) => a.classList.toggle('active', k === i)); };
+  document.addEventListener('scroll', spy, { passive: true }); spy();
+});
+</script>
+<script>
+/* ======================= page content: edit below (data and diagram calls only) ======================= */
+
+/* Architecture: one entry per data-c → [title, owner, what it does (HTML ok), interface, phase] */
+const ARCH = {
+  producer:   ['Team service', 'Each team', 'Publishes an event with an idempotency key.', '<code>POST /v1/events</code>', '1'],
+  api:        ['Events API', 'Platform', 'Validates the event against its schema and saves it before returning 202.', '<code>POST /v1/events</code>', '1'],
+  fanout:     ['Fan-out', 'Platform', 'Creates one delivery per matching subscription, in the same transaction as the event.', 'internal', '1'],
+  console:    ['Console', 'Platform', 'Deliveries, failures and replays per subscription.', 'web app', '2'],
+  queue:      ['Queue', 'Infra', 'Holds due deliveries, keyed by <code>deliveryId</code>.', 'Worker API', '1'],
+  worker:     ['Worker pool', 'Infra', 'Signs, sends and records each attempt.', 'Worker API', '1'],
+  subscriber: ['Subscriber URL', 'External', 'Receives a signed POST and returns 2xx.', 'HTTPS', '1'],
+  db:         ['Postgres', 'Reused', 'Events, deliveries and attempts.', '—', '1'],
+  tracing:    ['Tracing', 'Reused', 'One trace per delivery.', '<code>traceparent</code>', '1'],
+};
+
+/* Sequence diagrams: seq(id, lanes, steps, { gap, row })
+   lanes: { n: name, s: subtitle, o: 'a' | 'b' | 'c' (owners) | 's' (reused) | 'x' (external, dashed) }
+   steps: [from, to, label] call · [from, to, label, 'ret'] dashed return · [i, i, text] note · [i, i, text, 'warn'] failure
+   Label budget: an arrow label must fit its arrow, about gap ÷ 6.3 characters per lane it spans (≈ 27 at gap 175).
+   A note fits about gap × 0.3 characters (≈ 52 at gap 175). */
+seq('seqDelivery',
+  [{ n: 'Team service', s: 'producer', o: 'x' }, { n: 'Events API', s: 'Platform', o: 'a' }, { n: 'Queue + worker', s: 'Infra', o: 'b' }, { n: 'Subscriber', s: 'external', o: 'x' }],
+  [[0, 1, 'POST /events {eventId}'],
+   [1, 1, 'save event + one delivery per subscriber'],
+   [1, 0, '202 Accepted', 'ret'],
+   [1, 2, 'PUT /jobs/{deliveryId}'],
+   [2, 3, 'POST signed body'],
+   [3, 2, '503', 'ret'],
+   [2, 2, 'attempt saved · retry after backoff'],
+   [2, 3, 'POST signed body (attempt 2)'],
+   [3, 2, '200', 'ret'],
+   [2, 1, 'delivered', 'ret']], { gap: 200 });
+
+seq('seqCrash',
+  [{ n: 'Queue', s: 'Infra', o: 'b' }, { n: 'Worker A', s: 'attempt 1', o: 'b' }, { n: 'Worker B', s: 'attempt 2', o: 'b' }, { n: 'Subscriber', s: 'external', o: 'x' }, { n: 'Postgres', s: 'reused', o: 's' }],
+  [[1, 3, 'POST signed body'],
+   [3, 1, '200', 'ret'],
+   [1, 1, 'crash before the result is saved', 'warn'],
+   [0, 2, 'lease expired · redeliver'],
+   [2, 3, 'POST, same eventId'],
+   [3, 3, 'dedupes on eventId'],
+   [2, 4, 'save delivered']], { gap: 165 });
+
+/* State diagrams: stateDiagram(id, { nodes, edges, terminal, accent, warn })
+   nodes: { name: [x, y] } top-left of a 120×34 box; leave ≥ 60 px between boxes for labels.
+   edges: [from, to, label?, { shift, dx, dy }]; give both edges of a two-way pair the same shift (e.g. -12). */
+stateDiagram('stateDelivery', {
+  nodes: { pending: [20, 80], sending: [190, 80], waiting: [190, 180], delivered: [420, 20], failed: [420, 140] },
+  edges: [['pending', 'sending'], ['sending', 'delivered', '2xx'], ['sending', 'failed', 'max attempts'],
+          ['sending', 'waiting', 'retry', { shift: -12 }], ['waiting', 'sending', 'due', { shift: -12 }]],
+  terminal: ['delivered', 'failed'], accent: 'sending', warn: 'waiting'
+});
+</script>
+</body>
+</html>
